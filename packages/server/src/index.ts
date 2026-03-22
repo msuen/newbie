@@ -32,10 +32,10 @@ app.get('/api/health', (_req, res) => {
 // In production, serve the built Vue client
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist')
 app.use(express.static(clientDist))
-app.get('*', (_req, res) => {
+app.get('{*path}', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'))
 })
 
-app.listen(PORT, () => {
-  console.log(`Newbie server running on http://localhost:${PORT}`)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Newbie server running on 0.0.0.0:${PORT}`)
 })
