@@ -62,7 +62,7 @@ function goToExplainer(itemId: string) {
 
           <div v-if="expandedItem === item.id" class="item-expanded">
             <p class="why-listen">{{ item.whyListen }}</p>
-            <SpotifyEmbed :spotify-uri="item.spotifyUri" compact />
+            <SpotifyEmbed :spotify-uri="item.spotifyUri" :title="item.title" :artist="item.artist" compact />
             <div class="item-actions">
               <button class="action-btn" @click="goToExplainer(item.id)">
                 Read explainer

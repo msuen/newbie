@@ -1,8 +1,9 @@
 import type { RoadmapStep } from '../types/index.js'
 
 /**
- * Enrich playlist items with Spotify URIs using the free oEmbed API.
- * This requires no API key or authentication.
+ * Enrich playlist items with validated Spotify URIs.
+ * Items that already have a spotifyUri (from Claude generation) get validated.
+ * Items without one get a search fallback via iTunes.
  */
 export async function enrichWithSpotify(steps: RoadmapStep[]): Promise<RoadmapStep[]> {
   const enriched = await Promise.all(
@@ -10,7 +11,13 @@ export async function enrichWithSpotify(steps: RoadmapStep[]): Promise<RoadmapSt
       ...step,
       items: await Promise.all(
         step.items.map(async (item) => {
-          const spotifyUri = await searchSpotify(item.title, item.artist, item.type)
+          if (item.spotifyUri) {
+            // Validate the Claude-provided URI via oEmbed
+            const valid = await validateSpotifyUri(item.spotifyUri)
+            if (valid) return item
+          }
+          // Fallback: try to find via iTunes search
+          const spotifyUri = await findViaItunes(item.title, item.artist, item.type)
           return { ...item, spotifyUri }
         })
       ),
@@ -19,23 +26,50 @@ export async function enrichWithSpotify(steps: RoadmapStep[]): Promise<RoadmapSt
   return enriched
 }
 
-async function searchSpotify(
+/**
+ * Validate a Spotify URI by checking the oEmbed endpoint (free, no auth).
+ */
+async function validateSpotifyUri(uri: string): Promise<boolean> {
+  try {
+    // Convert URI to URL: spotify:track:ID -> https://open.spotify.com/track/ID
+    const parts = uri.replace('spotify:', '').split(':')
+    if (parts.length !== 2) return false
+    const url = `https://open.spotify.com/${parts[0]}/${parts[1]}`
+    const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`
+
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(3000) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Search iTunes (free, no auth) to find music metadata,
+ * then attempt to find the corresponding Spotify content.
+ */
+async function findViaItunes(
   title: string,
   artist: string,
   type: 'album' | 'song'
 ): Promise<string | null> {
   try {
-    const query = encodeURIComponent(`${title} ${artist}`)
-    const spotifyType = type === 'song' ? 'track' : 'album'
-    const searchUrl = `https://open.spotify.com/search/${query}`
+    const query = `${title} ${artist}`
+    const itunesEntity = type === 'song' ? 'song' : 'album'
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=${itunesEntity}&limit=1`
 
-    // Use oEmbed to check if a search URL resolves
-    // Note: oEmbed only works with direct content URLs, not search URLs
-    // For MVP, we construct a plausible URI that can be searched client-side
-    // A proper implementation would use the Spotify Web API with client credentials
+    const res = await fetch(itunesUrl, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
 
-    // For now, return null — Spotify embed will show a placeholder
-    // and users can use the deep link to search on Spotify
+    const data = (await res.json()) as {
+      resultCount: number
+      results: Array<{ trackName?: string; collectionName?: string; artistName?: string }>
+    }
+    if (data.resultCount === 0) return null
+
+    // iTunes confirmed the item exists — return null for now
+    // (we can't get Spotify IDs from iTunes)
+    // The Claude-provided ID was already our best shot
     return null
   } catch {
     return null

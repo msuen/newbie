@@ -13,7 +13,8 @@ Rules:
 - Each item needs a 1-2 sentence "whyListen" hook
 - Be specific about album names, artist names, and years
 - For genres, cover key eras and subgenres
-- For artists, cover their career evolution`
+- For artists, cover their career evolution
+- For each item, provide the Spotify ID if you know it (the alphanumeric ID from the Spotify URL, e.g. "4aawyAB9vmqN3uQ7FjRGTy" from open.spotify.com/album/4aawyAB9vmqN3uQ7FjRGTy). Only provide IDs you are confident about — leave null if unsure.`
 
 interface GeneratedRoadmap {
   title: string
@@ -27,6 +28,7 @@ interface GeneratedRoadmap {
       artist: string
       year: number | null
       whyListen: string
+      spotifyId: string | null
     }[]
   }[]
 }
@@ -74,6 +76,7 @@ export async function generateRoadmap(
                         artist: { type: 'string' },
                         year: { type: 'number' },
                         whyListen: { type: 'string' },
+                        spotifyId: { type: 'string', description: 'Spotify content ID (22-char alphanumeric, e.g. 4aawyAB9vmqN3uQ7FjRGTy). Null if unknown.' },
                       },
                       required: ['type', 'title', 'artist', 'whyListen'],
                     },
@@ -110,7 +113,7 @@ export async function generateRoadmap(
       title: item.title,
       artist: item.artist,
       year: item.year ?? null,
-      spotifyUri: null,
+      spotifyUri: item.spotifyId ? `spotify:${item.type === 'song' ? 'track' : 'album'}:${item.spotifyId}` : null,
       appleMusicUrl: null,
       whyListen: item.whyListen,
     })),
