@@ -13,14 +13,14 @@ router.use(optionalAuth)
 
 // Generate a new roadmap
 router.post('/generate', async (req: AuthRequest, res) => {
-  const { query, queryType } = req.body
+  const { query, queryType, force } = req.body
   if (!query || !queryType) {
     res.status(400).json({ error: 'query and queryType are required' })
     return
   }
 
   // Check cache first (same query within last 7 days)
-  const cached = db
+  const cached = !force && db
     .prepare(
       `SELECT * FROM roadmaps
        WHERE query = ? AND query_type = ?
@@ -30,18 +30,23 @@ router.post('/generate', async (req: AuthRequest, res) => {
     .get(query.toLowerCase(), queryType) as any
 
   if (cached) {
-    const roadmap: Roadmap = {
-      id: cached.id,
-      query: cached.query,
-      queryType: cached.query_type,
-      title: cached.title,
-      description: cached.description,
-      steps: JSON.parse(cached.steps_json),
-      shareCode: cached.share_code,
-      createdAt: cached.created_at,
+    const steps = JSON.parse(cached.steps_json)
+    // Check if cached roadmap has Spotify data; if not, regenerate
+    const hasSpotify = steps.some((s: any) => s.items.some((i: any) => i.spotifyUri))
+    if (hasSpotify) {
+      const roadmap: Roadmap = {
+        id: cached.id,
+        query: cached.query,
+        queryType: cached.query_type,
+        title: cached.title,
+        description: cached.description,
+        steps,
+        shareCode: cached.share_code,
+        createdAt: cached.created_at,
+      }
+      res.json(roadmap)
+      return
     }
-    res.json(roadmap)
-    return
   }
 
   try {
